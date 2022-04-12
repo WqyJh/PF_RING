@@ -46,7 +46,7 @@
 #include "pfutils.c"
 
 #define DEFAULT_DEVICE     "eth0"
-#define ALARM_SLEEP             1
+#define ALARM_SLEEP            10
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
 
@@ -88,8 +88,10 @@ void print_stats() {
   int i;
   unsigned long long bytes_received = 0, pkt_received = 0, pkt_dropped = 0;
   unsigned long long pkt_received_last = 0;
+  static unsigned long long pkt_dropped_last = 0;
   double pkt_thpt = 0, tot_thpt = 0, delta_last;
   char buf1[64];
+  char buf2[64];
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -128,22 +130,28 @@ void print_stats() {
 	tot_thpt += thpt;
 	pps = ((double)diff/(double)(delta_last/1000));
 	fprintf(stderr, "=========================\n"
-		"Actual Stats: [channel=%d][%llu pkts][%.1f ms][%s pps]\n",
+		"Actual Stats: [channel=%d][%llu pkts][%.1f ms][%s pps][%s pps drop]\n",
 		i, (long long unsigned int)diff, delta_last,
-	        pfring_format_numbers(((double)diff/(double)(delta_last/1000)), buf1, sizeof(buf1), 1));
+	        pfring_format_numbers(pps, buf1, sizeof(buf1), 1));
 	pkt_thpt += pps;
       }
 
       lastPkts[i] = threads[i].numPkts;
     }
   }
+  double drop_pps;
+  if(lastTime.tv_sec > 0) {
+    drop_pps = ((double)(pkt_dropped - pkt_dropped_last)/(double)(delta_last/1000));
+    pkt_dropped_last = pkt_dropped;
+  }
 
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 
   fprintf(stderr, "=========================\n");
-  fprintf(stderr, "Aggregate stats (all channels): [%s pps][%.2f Mbit/sec][%llu pkts rcvd][%llu pkts dropped][%llu pkts total]\n", 
+  fprintf(stderr, "Aggregate stats (all channels): [%s pps][%.2f Mbit/sec][%s pps drop][%llu pkts rcvd][%llu pkts dropped][%llu pkts total]\n",
 	  pfring_format_numbers((double)(pkt_received_last*1000)/(double)delta_last, buf1, sizeof(buf1), 1), 
           tot_thpt,
+          pfring_format_numbers(drop_pps, buf2, sizeof(buf2), 1),
           pkt_received, 
           pkt_dropped,
           pkt_received + pkt_dropped);
